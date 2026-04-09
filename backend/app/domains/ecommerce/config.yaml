@@ -1,0 +1,311 @@
+# domains/ecommerce/config.yaml
+name: "电商售后客服"
+version: "1.0.0"
+description: "电商售后场景智能客服，覆盖订单、物流、退换货、商品咨询"
+
+# ─────────────── 意图与槽位 ───────────────
+
+intents:
+  # ── 订单查询 ──
+  - id: "order_status"
+    name: "订单状态查询"
+    description: "查询订单当前状态"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        pattern: "^[A-Z0-9]{10,20}$"
+        prompt: "请提供您的订单号，我帮您查询。"
+        extract_hint: "订单号通常是10-20位的数字字母组合"
+    fallback_slots:
+      - id: "phone"
+        type: "phone"
+        prompt: "也可以提供下单时的手机号，我帮您查找。"
+
+  # ── 物流查询 ──
+  - id: "logistics_query"
+    name: "物流进度查询"
+    description: "查询包裹物流信息"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供订单号，我帮您查看物流进度。"
+    optional_slots:
+      - id: "logistics_company"
+        type: "enum"
+        values: ["顺丰", "中通", "圆通", "韵达", "申通", "京东", "邮政"]
+        prompt: "方便告知是哪家快递吗？"
+
+  # ── 退款申请 ──
+  - id: "refund_request"
+    name: "申请退款"
+    description: "用户申请退款"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要退款的订单号。"
+      - id: "refund_reason"
+        type: "enum"
+        values:
+          - "不想要了/多拍了"
+          - "商品质量问题"
+          - "与描述不符"
+          - "未收到货"
+          - "发错货"
+          - "其他"
+        prompt: "请选择退款原因：\n1. 不想要了/多拍了\n2. 商品质量问题\n3. 与描述不符\n4. 未收到货\n5. 发错货\n6. 其他"
+    optional_slots:
+      - id: "refund_amount"
+        type: "money"
+        prompt: "需要退全款还是部分退款？"
+      - id: "refund_evidence"
+        type: "image"
+        prompt: "如果是质量问题，请上传商品照片作为凭证。"
+    confirmation_required: true
+    confirm_prompt: "确认为订单 {order_id} 申请退款，原因：{refund_reason}。是否提交？"
+
+  # ── 退货申请 ──
+  - id: "return_request"
+    name: "申请退货"
+    description: "用户申请退货退款"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要退货的订单号。"
+      - id: "return_reason"
+        type: "enum"
+        values: ["质量问题", "尺码不合适", "颜色/款式不满意", "与描述不符", "其他"]
+        prompt: "请问退货原因是？"
+    optional_slots:
+      - id: "return_evidence"
+        type: "image"
+        prompt: "方便拍照提供商品图片吗？"
+    confirmation_required: true
+
+  # ── 换货申请 ──
+  - id: "exchange_request"
+    name: "申请换货"
+    description: "用户申请换货"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要换货的订单号。"
+      - id: "exchange_reason"
+        type: "enum"
+        values: ["尺码不合适", "颜色/款式不满意", "发错货", "其他"]
+        prompt: "请问换货原因是？"
+    confirmation_required: true
+
+  # ── 退款进度 ──
+  - id: "refund_status"
+    name: "退款进度查询"
+    description: "查询退款处理进度"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供订单号，我帮您查看退款进度。"
+
+  # ── 订单修改 ──
+  - id: "order_modify"
+    name: "修改订单"
+    description: "修改订单信息（地址、数量等）"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要修改的订单号。"
+      - id: "modify_type"
+        type: "enum"
+        values: ["修改地址", "修改数量", "其他"]
+        prompt: "您需要修改什么信息？"
+
+  # ── 取消订单 ──
+  - id: "order_cancel"
+    name: "取消订单"
+    description: "用户取消订单"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要取消的订单号。"
+    confirmation_required: true
+    confirm_prompt: "确认取消订单 {order_id} 吗？取消后不可恢复。"
+
+  # ── 商品咨询 ──
+  - id: "product_consult"
+    name: "商品咨询"
+    description: "商品规格、使用方法等咨询"
+    required_slots:
+      - id: "product_name"
+        type: "string"
+        prompt: "您想咨询哪款商品？"
+    optional_slots:
+      - id: "question_type"
+        type: "enum"
+        values: ["规格参数", "使用方法", "适用范围", "保修政策", "其他"]
+
+  # ── 商品投诉 ──
+  - id: "product_complaint"
+    name: "商品质量投诉"
+    description: "商品质量相关投诉"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供相关订单号。"
+      - id: "complaint_detail"
+        type: "text"
+        prompt: "请描述商品质量问题。"
+    optional_slots:
+      - id: "evidence"
+        type: "image"
+        prompt: "方便拍照提供凭证吗？"
+    auto_escalate: true
+    escalate_after: 3
+
+  # ── 优惠券查询 ──
+  - id: "coupon_query"
+    name: "优惠券查询"
+    description: "优惠券查询和使用说明"
+    required_slots: []
+
+  # ── 支付问题 ──
+  - id: "payment_issue"
+    name: "支付问题"
+    description: "支付相关问题"
+    required_slots:
+      - id: "issue_detail"
+        type: "text"
+        prompt: "请描述您遇到的支付问题。"
+
+  # ── 开发票 ──
+  - id: "invoice_request"
+    name: "开发票"
+    description: "申请开具发票"
+    required_slots:
+      - id: "order_id"
+        type: "string"
+        prompt: "请提供需要开票的订单号。"
+      - id: "invoice_type"
+        type: "enum"
+        values: ["增值税普通发票", "增值税专用发票"]
+        prompt: "需要普通发票还是专用发票？"
+
+  # ── 投诉 ──
+  - id: "complaint"
+    name: "投诉"
+    description: "一般投诉"
+    required_slots:
+      - id: "complaint_content"
+        type: "text"
+        prompt: "请描述您遇到的问题，我们会尽快为您处理。"
+    auto_escalate: true
+    escalate_after: 2
+
+  # ── 转人工 ──
+  - id: "human_agent"
+    name: "转人工"
+    description: "用户要求转人工客服"
+    required_slots: []
+
+# ─────────────── 意图识别规则（高频快匹配）───────────────
+
+intent_rules:
+  logistics_query:
+    - "物流|快递|到哪了|发货了吗|运单|tracking"
+    - "什么时候到|几天到|到了吗"
+  refund_request:
+    - "退款|退钱|不想要了|申请退"
+  refund_status:
+    - "退款.*进度|退款.*到账|退了吗|钱.*退.*了吗"
+  order_status:
+    - "订单.*状态|订单.*到哪|我的订单"
+  human_agent:
+    - "转人工|人工客服|真人|找个人"
+
+# ─────────────── 模型配置 ───────────────
+
+model:
+  preferred: "deepseek-chat"
+  temperature: 0.3
+  max_tokens: 800
+  overrides:
+    product_consult:
+      temperature: 0.5
+      max_tokens: 1200
+    complaint:
+      preferred: "deepseek-v3"
+      temperature: 0.2
+
+# ─────────────── 外部集成 ───────────────
+
+integrations:
+  order_api:
+    base_url: "${ORDER_API_BASE}"
+    auth: "bearer ${ORDER_API_TOKEN}"
+    endpoints:
+      get_order: "GET /api/orders/{order_id}"
+      cancel_order: "POST /api/orders/{order_id}/cancel"
+      get_refund_status: "GET /api/refunds/{order_id}"
+
+  logistics_api:
+    base_url: "${LOGISTICS_API_BASE}"
+    endpoints:
+      query: "GET /api/track/{tracking_no}"
+
+  product_api:
+    base_url: "${PRODUCT_API_BASE}"
+    endpoints:
+      search: "GET /api/products/search?q={query}"
+      detail: "GET /api/products/{product_id}"
+
+# ─────────────── 知识库 ───────────────
+
+knowledge:
+  sources:
+    - type: "qa_pairs"
+      path: "knowledge/qa_pairs.json"
+      priority: highest
+    - type: "file"
+      path: "knowledge/退换货政策.md"
+      priority: high
+    - type: "file"
+      path: "knowledge/常见问题FAQ.md"
+      priority: high
+    - type: "file"
+      path: "knowledge/商品目录.md"
+      priority: medium
+    - type: "file"
+      path: "knowledge/物流说明.md"
+      priority: medium
+
+# ─────────────── 人机转接规则 ───────────────
+
+handoff:
+  triggers:
+    - type: "intent"
+      value: "complaint"
+      after_rounds: 2
+    - type: "keyword"
+      values: ["投诉", "315", "消协", "工商", "曝光", "起诉"]
+      immediate: true
+    - type: "sentiment"
+      threshold: -0.7
+    - type: "confidence"
+      threshold: 0.4
+      consecutive: 3
+    - type: "loop"
+      max_rounds: 8
+
+  queue_config:
+    max_wait: 300
+    overflow_message: "当前客服繁忙，已记录您的问题，将在30分钟内回复您。"
+
+# ─────────────── UI 配置 ───────────────
+
+ui:
+  theme_color: "#FF6B35"
+  welcome_message: "您好！我是智能客服小助手，可以帮您查订单、查物流、处理退换货。请问有什么可以帮您？"
+  avatar: "assets/ecommerce_avatar.png"
+  quick_replies:
+    - "查询订单"
+    - "查物流"
+    - "申请退款"
+    - "商品咨询"
+    - "转人工"

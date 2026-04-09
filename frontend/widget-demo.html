@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能客服Widget演示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .demo-section {
+            margin: 40px 0;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        h2 {
+            color: #333;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>智能客服Widget演示</h1>
+        
+        <div class="demo-section">
+            <h2>基本用法</h2>
+            <p>只需在HTML中添加以下标签即可嵌入智能客服：</p>
+            <pre>&lt;chat-widget
+    api-url="http://localhost:8000/api"
+    tenant-id="default"
+    theme-color="#4A90E2"
+    welcome-message="您好！我是智能客服助手，有什么可以帮助您的吗？"
+&gt;&lt;/chat-widget&gt;</pre>
+        </div>
+        
+        <div class="demo-section">
+            <h2>自定义主题</h2>
+            <p>可以通过theme-color属性自定义主题颜色：</p>
+            <pre>&lt;chat-widget
+    api-url="http://localhost:8000/api"
+    tenant-id="default"
+    theme-color="#FF6B35"
+    welcome-message="您好！我是电商售后客服，有什么可以帮助您的吗？"
+&gt;&lt;/chat-widget&gt;</pre>
+        </div>
+        
+        <div class="demo-section">
+            <h2>实际效果</h2>
+            <p>以下是实际运行的客服Widget：</p>
+        </div>
+    </div>
+
+    <!-- 引入Web Component -->
+    <script src="js/chat-widget.js"></script>
+    
+    <!-- 示例1：默认主题 -->
+    <chat-widget
+        api-url="http://localhost:8000/api"
+        tenant-id="default"
+        theme-color="#4A90E2"
+        welcome-message="您好！我是智能客服助手，有什么可以帮助您的吗？"
+    ></chat-widget>
+    
+    <!-- 示例2：电商主题 -->
+    <chat-widget
+        api-url="http://localhost:8000/api"
+        tenant-id="ecommerce"
+        theme-color="#FF6B35"
+        welcome-message="您好！我是电商售后客服，有什么可以帮助您的吗？"
+    ></chat-widget>
+</body>
+</html>

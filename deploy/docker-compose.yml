@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  # ─── 后端 API ───
+  backend:
+    build: ../backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ../backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─── PostgreSQL ───
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: smartcs
+      POSTGRES_USER: smartcs
+      POSTGRES_PASSWORD: smartcs123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # ─── Redis ───
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  # ─── ChromaDB（向量数据库）───
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadata:/chroma/chroma
+
+volumes:
+  pgdata:
+  redisdata:
+  chromadata:
