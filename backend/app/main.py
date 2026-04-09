@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, tenant, knowledge, analytics, admin, memory
+from app.api import chat, tenant, knowledge, analytics, admin, memory, interpret
 
 app = FastAPI(
     title="智能客服平台",
@@ -27,6 +27,7 @@ app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"]
 app.include_router(analytics.router, prefix="/api/analytics", tags=["数据分析"])
 app.include_router(admin.router, prefix="/api/admin", tags=["管理"])
 app.include_router(memory.router, prefix="/api/memory", tags=["记忆管理"])
+app.include_router(interpret.router, prefix="/api", tags=["八字解读"])
 
 
 @app.get("/health")

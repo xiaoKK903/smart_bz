@@ -1,0 +1,141 @@
+name: "八字命理"  
+version: "1.0.0"
+description: "专业八字排盘与命理解读"
+
+# ─────────────── 意图与槽位 ───────────────
+
+intents:
+  # ── 八字解读 ──
+  - id: "bazi_reading"
+    name: "八字解读"
+    description: "根据用户出生信息进行八字排盘和解读"
+    required_slots:
+      - id: "birth_year"
+        type: "number"
+        prompt: "请告诉我您的出生年份"
+      - id: "birth_month"
+        type: "number"
+        prompt: "请告诉我您的出生月份"
+      - id: "birth_day"
+        type: "number"
+        prompt: "请告诉我您的出生日期"
+      - id: "birth_hour"
+        type: "number"
+        prompt: "请告诉我您的出生时辰（24小时制）"
+      - id: "gender"
+        type: "enum"
+        values: ["男", "女"]
+        prompt: "请告诉我您的性别"
+    optional_slots:
+      - id: "birth_place"
+        type: "string"
+        prompt: "出生地点可以帮助更精确的排盘，方便告知吗？"
+
+  # ── 运势查询 ──
+  - id: "fortune_query"
+    name: "运势查询"
+    description: "查询特定时间段的运势"
+    required_slots:
+      - id: "query_type"
+        type: "enum"
+        values: ["年运", "月运", "日运", "流年"]
+        prompt: "您想查询哪种运势？（年运/月运/日运/流年）"
+    optional_slots:
+      - id: "target_year"
+        type: "number"
+        prompt: "请输入目标年份"
+
+  # ── 关系分析 ──
+  - id: "relationship_analysis"
+    name: "关系分析"
+    description: "分析人与人之间的关系"
+    required_slots:
+      - id: "relation_type"
+        type: "enum"
+        values: ["婚姻", "事业", "合作", "朋友"]
+        prompt: "您想分析哪种关系？（婚姻/事业/合作/朋友）"
+    optional_slots:
+      - id: "other_birth_info"
+        type: "string"
+        prompt: "请提供对方的出生信息（年月日时）"
+
+  # ── 起名建议 ──
+  - id: "name_suggestion"
+    name: "起名建议"
+    description: "根据八字提供起名建议"
+    required_slots:
+      - id: "name_gender"
+        type: "enum"
+        values: ["男", "女"]
+        prompt: "请告诉性别"
+    optional_slots:
+      - id: "name_preference"
+        type: "string"
+        prompt: "有什么起名偏好吗？"
+
+  # ── 一般咨询 ──
+  - id: "general_query"
+    name: "一般咨询"
+    description: "关于八字命理的一般问题"
+    optional_slots:
+      - id: "query_topic"
+        type: "string"
+        prompt: "请具体说明您的问题"
+
+# ─────────────── 模型配置 ───────────────
+
+model:
+  preferred: "deepseek-chat"
+  temperature: 0.7          # 命理解读需要一定的创造性
+  max_tokens: 2000          # 解读内容可能较长
+  
+  # 意图级模型覆盖
+  overrides:
+    general_query:
+      temperature: 0.5      # 一般咨询可以稍微收敛
+      max_tokens: 1000
+
+# ─────────────── 知识库 ───────────────
+
+knowledge:
+  sources:
+    - type: "file"
+      path: "knowledge/命理基础.md"
+      priority: high
+    - type: "file"
+      path: "knowledge/十神详解.md"
+      priority: high
+    - type: "file"
+      path: "knowledge/格局分析.md"
+      priority: medium
+    - type: "qa_pairs"
+      path: "knowledge/qa_pairs.json"
+      priority: highest    # 精确QA对最高优先级
+
+# ─────────────── 人机转接规则 ───────────────
+
+handoff:
+  triggers:
+    - type: "keyword"
+      values: ["转人工", "人工客服", "真人", "找个人"]
+      immediate: true           # 关键词立即转
+    - type: "confidence"
+      threshold: 0.4
+      consecutive: 3            # 连续3轮低置信度转
+
+  queue_config:
+    max_wait: 300               # 最长排队5分钟
+    overflow_message: "当前客服繁忙，已记录您的问题，将在30分钟内回复您。"
+
+# ─────────────── UI 配置 ───────────────
+
+ui:
+  theme_color: "#8B4513"
+  welcome_message: "您好，我是八字命理师。请告诉我您的出生信息，为您排盘解读。"
+  avatar: "assets/bazi_avatar.png"
+  quick_replies:
+    - "八字解读"
+    - "运势查询"
+    - "关系分析"
+    - "起名建议"
+    - "转人工"

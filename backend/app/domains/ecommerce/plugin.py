@@ -1,281 +1,190 @@
 """电商售后领域插件"""
 
-from domains.base import BaseDomainPlugin, Intent, Slot, Session, Tool
-from typing import Optional
-import httpx
+import os
+import yaml
+from typing import List, Optional
+
+from app.domains.base.plugin import BaseDomainPlugin, Intent, Slot, Session, Tool
+
+
+# ─── Mock 数据（替代真实 API） ───
+
+MOCK_ORDERS = {
+    "ORD2024001234": {
+        "id": "ORD2024001234",
+        "status": "shipped",
+        "total_amount": 299.00,
+        "items": [{"name": "无线蓝牙耳机", "quantity": 1, "price": 299.00}],
+        "created_at": "2024-03-15 14:30:00",
+        "shipping_address": "北京市朝阳区xxx",
+    },
+    "ORD2024005678": {
+        "id": "ORD2024005678",
+        "status": "delivered",
+        "total_amount": 158.00,
+        "items": [{"name": "保温杯", "quantity": 2, "price": 79.00}],
+        "created_at": "2024-03-10 09:15:00",
+        "shipping_address": "上海市浦东新区xxx",
+    },
+}
+
+MOCK_LOGISTICS = {
+    "ORD2024001234": {
+        "company": "顺丰速运",
+        "tracking_no": "SF1234567890",
+        "status": "运输中",
+        "estimated_delivery": "2024-03-18",
+        "tracks": [
+            {"time": "2024-03-16 18:00", "content": "已到达 北京转运中心"},
+            {"time": "2024-03-16 08:00", "content": "已从 深圳 发出"},
+            {"time": "2024-03-15 20:00", "content": "已揽收"},
+        ],
+    },
+}
 
 
 class EcommercePlugin(BaseDomainPlugin):
     """电商售后领域插件"""
 
-    def __init__(self, config: dict):
+    def __init__(self):
+        config = self._load_config()
         super().__init__(config)
-        self.order_client = httpx.AsyncClient(
-            base_url=config["integrations"]["order_api"]["base_url"],
-            headers={"Authorization": config["integrations"]["order_api"]["auth"]},
-        )
 
-    # ─────────── 接口实现 ───────────
+    def _load_config(self) -> dict:
+        config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"[EcommercePlugin] 加载配置失败: {e}")
+            return {"name": "电商售后", "intents": []}
 
-    def get_intents(self) -> list[Intent]:
-        return [Intent.from_yaml(i) for i in self.config["intents"]]
+    # ─── 接口实现 ───
 
-    def get_slots(self, intent: str) -> list[Slot]:
-        intent_config = self._find_intent(intent)
-        slots = [Slot.from_yaml(s) for s in intent_config.get("required_slots", [])]
-        slots += [
-            Slot.from_yaml(s, required=False)
-            for s in intent_config.get("optional_slots", [])
+    def get_intents(self) -> List[Intent]:
+        intents = []
+        for ic in self.config.get("intents", []):
+            intents.append(Intent(
+                id=ic.get("id", ""),
+                name=ic.get("name", ""),
+                description=ic.get("description", ""),
+            ))
+        # 补充默认意图
+        ids = {i.id for i in intents}
+        defaults = [
+            ("order_status", "订单查询", "查询订单状态"),
+            ("logistics_query", "物流查询", "查询物流进度"),
+            ("refund_request", "退款申请", "申请退款"),
+            ("return_request", "退货申请", "申请退货"),
+            ("product_consult", "商品咨询", "商品相关咨询"),
+            ("complaint", "投诉", "用户投诉"),
+            ("human_agent", "转人工", "转接人工客服"),
         ]
-        return slots
+        for d_id, d_name, d_desc in defaults:
+            if d_id not in ids:
+                intents.append(Intent(id=d_id, name=d_name, description=d_desc))
+        return intents
+
+    def get_slots(self, intent: str) -> List[Slot]:
+        if intent in ("order_status", "logistics_query", "refund_status"):
+            return [Slot(id="order_id", type="string", prompt="请提供您的订单号。", required=True)]
+        if intent == "refund_request":
+            return [
+                Slot(id="order_id", type="string", prompt="请提供需要退款的订单号。", required=True),
+                Slot(id="refund_reason", type="string", prompt="请问退款原因是什么？", required=True),
+            ]
+        if intent == "return_request":
+            return [
+                Slot(id="order_id", type="string", prompt="请提供需要退货的订单号。", required=True),
+                Slot(id="return_reason", type="string", prompt="请问退货原因是什么？", required=True),
+            ]
+        return []
 
     def build_context(self, session: Session) -> str:
-        context_parts = []
+        parts = []
 
         order_id = session.get_slot("order_id")
         if order_id:
-            order_info = self._format_order_info(session.cache.get("order_data"))
-            if order_info:
-                context_parts.append(f"【订单信息】\n{order_info}")
+            order = MOCK_ORDERS.get(order_id)
+            if order:
+                status_text = self._status_text(order["status"])
+                items_text = ", ".join(
+                    f"{i['name']}×{i['quantity']}" for i in order["items"]
+                )
+                parts.append(
+                    f"【订单信息】\n订单号: {order['id']}\n状态: {status_text}\n"
+                    f"商品: {items_text}\n金额: ¥{order['total_amount']}\n"
+                    f"下单时间: {order['created_at']}"
+                )
 
-        logistics = session.cache.get("logistics_data")
-        if logistics:
-            context_parts.append(f"【物流信息】\n{self._format_logistics(logistics)}")
+                logistics = MOCK_LOGISTICS.get(order_id)
+                if logistics:
+                    tracks = "\n".join(
+                        f"  {t['time']} {t['content']}" for t in logistics["tracks"][:3]
+                    )
+                    parts.append(
+                        f"【物流信息】\n快递: {logistics['company']} {logistics['tracking_no']}\n"
+                        f"状态: {logistics['status']}\n预计送达: {logistics['estimated_delivery']}\n"
+                        f"轨迹:\n{tracks}"
+                    )
+            else:
+                parts.append(f"【订单 {order_id} 未找到】")
 
-        user_tags = session.user_profile.get("tags", [])
-        if user_tags:
-            context_parts.append(f"【用户标签】{', '.join(user_tags)}")
+        tags = session.user_profile.get("tags", [])
+        if tags:
+            parts.append(f"【用户标签】{', '.join(tags)}")
 
-        if session.user_profile.get("vip_level"):
-            context_parts.append(
-                f"【VIP等级】{session.user_profile['vip_level']}（请优先处理）"
-            )
+        vip = session.user_profile.get("vip_level")
+        if vip:
+            parts.append(f"【VIP等级】{vip}（请优先处理）")
 
-        return "\n\n".join(context_parts)
+        return "\n\n".join(parts)
 
     def get_system_prompt(self, intent: str) -> str:
-        base_prompt = """你是一位专业的电商售后客服。请遵循以下原则：
+        base = """你是一位专业的电商售后客服。
 
-## 角色
-- 友好、耐心、专业
-- 始终站在客户角度思考
-- 快速定位问题并给出解决方案
-
-## 规则
-1. 先确认用户问题，再给方案
-2. 涉及退款/退货，必须先查订单状态再处理
-3. 金额、时效等关键信息必须准确，不确定时说明
-4. 不要承诺超出权限的事情（如"立即退款"）
-5. 情绪激动的用户，先安抚再解决
-6. 复杂问题超出能力范围，引导转人工
+## 原则
+- 友好、耐心、专业，站在客户角度思考
+- 先确认问题，再给方案
+- 金额、时效等关键信息必须准确
+- 不承诺超出权限的事
+- 回复简洁，分步骤说明
 
 ## 话术规范
-- 禁止说"这不是我们的问题"
-- 禁止说"你自己去看"
-- 使用"我帮您查看""为您处理""非常抱歉给您带来不便"
-- 回复简洁，避免大段文字，分步骤说明"""
+- 禁止说"这不是我们的问题"、"你自己去看"
+- 使用"我帮您查看"、"为您处理"、"非常抱歉给您带来不便\""""
 
-        intent_prompts = {
-            "refund_request": """
-## 退款处理流程
-1. 确认订单号和退款原因
-2. 查询订单状态（已发货/未发货/已签收）
-3. 根据退换货政策判断是否符合条件
-4. 符合 → 引导提交退款申请
-5. 不符合 → 解释原因，提供替代方案""",
-            "complaint": """
-## 投诉处理流程
-1. 认真倾听，表达歉意
-2. 确认问题细节
-3. 给出解决方案或补偿建议
-4. 如用户不满意，告知将升级处理
-5. 记录投诉内容""",
-            "product_consult": """
-## 商品咨询
-1. 基于知识库中的商品信息回答
-2. 不确定的参数不要瞎编
-3. 可以适当推荐相关商品
-4. 引导用户下单（但不要过度推销）""",
+        extras = {
+            "refund_request": "\n\n## 退款流程\n1. 确认订单号和原因\n2. 查询订单状态\n3. 判断是否符合退款条件\n4. 引导提交申请",
+            "complaint": "\n\n## 投诉处理\n1. 认真倾听，表达歉意\n2. 确认问题细节\n3. 给出方案或补偿建议\n4. 升级处理",
+            "product_consult": "\n\n## 商品咨询\n1. 基于知识库回答\n2. 不确定的不瞎编\n3. 可适当推荐",
         }
-
-        extra = intent_prompts.get(intent, "")
-        return base_prompt + extra
+        return base + extras.get(intent, "")
 
     def post_process(self, response: str, session: Session) -> str:
         intent = session.current_intent
-
         if intent in ("refund_request", "return_request"):
             order_id = session.get_slot("order_id")
             if order_id and "确认" not in response:
-                response += f"\n\n📋 [点击提交退款申请]({self.config['ui'].get('refund_form_url', '#')}?order={order_id})"
-
+                response += f"\n\n📋 如需提交退款申请，请提供退款原因。"
         if intent == "logistics_query":
-            tracking_no = session.cache.get("tracking_no")
-            if tracking_no:
-                response += f"\n\n📦 [查看完整物流轨迹](https://www.kuaidi100.com/chaxun?nu={tracking_no})"
-
+            order_id = session.get_slot("order_id")
+            logistics = MOCK_LOGISTICS.get(order_id or "")
+            if logistics:
+                response += f"\n\n📦 运单号: {logistics['tracking_no']}"
         return response
 
-    def get_tools(self) -> list[Tool]:
-        return [
-            Tool(
-                name="query_order",
-                description="根据订单号查询订单详情（状态、金额、商品、收货地址）",
-                parameters={"order_id": {"type": "string", "description": "订单号"}},
-                handler=self._tool_query_order,
-            ),
-            Tool(
-                name="query_logistics",
-                description="根据订单号查询物流轨迹",
-                parameters={"order_id": {"type": "string", "description": "订单号"}},
-                handler=self._tool_query_logistics,
-            ),
-            Tool(
-                name="submit_refund",
-                description="提交退款申请",
-                parameters={
-                    "order_id": {"type": "string", "description": "订单号"},
-                    "reason": {"type": "string", "description": "退款原因"},
-                    "amount": {
-                        "type": "number",
-                        "description": "退款金额（可选，默认全额）",
-                    },
-                },
-                handler=self._tool_submit_refund,
-                requires_confirmation=True,
-            ),
-            Tool(
-                name="search_product",
-                description="搜索商品信息",
-                parameters={
-                    "query": {"type": "string", "description": "搜索关键词"}
-                },
-                handler=self._tool_search_product,
-            ),
-        ]
-
-    # ─────────── 工具实现 ───────────
-
-    async def _tool_query_order(self, order_id: str) -> dict:
-        resp = await self.order_client.get(f"/api/orders/{order_id}")
-        if resp.status_code == 404:
-            return {"error": "未找到该订单，请确认订单号是否正确"}
-        data = resp.json()
-        return {
-            "order_id": data["id"],
-            "status": data["status"],
-            "status_text": self._status_text(data["status"]),
-            "total_amount": data["total_amount"],
-            "items": [
-                {"name": i["name"], "qty": i["quantity"], "price": i["price"]}
-                for i in data["items"]
-            ],
-            "created_at": data["created_at"],
-            "shipping_address": data.get("shipping_address", ""),
-        }
-
-    async def _tool_query_logistics(self, order_id: str) -> dict:
-        resp = await self.order_client.get(f"/api/orders/{order_id}/logistics")
-        if resp.status_code != 200:
-            return {"error": "暂无物流信息"}
-        data = resp.json()
-        return {
-            "company": data["company"],
-            "tracking_no": data["tracking_no"],
-            "status": data["status"],
-            "latest": data["tracks"][0] if data["tracks"] else None,
-            "estimated_delivery": data.get("estimated_delivery"),
-            "tracks": data["tracks"][:5],
-        }
-
-    async def _tool_submit_refund(
-        self, order_id: str, reason: str, amount: float = None
-    ) -> dict:
-        payload = {"order_id": order_id, "reason": reason}
-        if amount:
-            payload["amount"] = amount
-        resp = await self.order_client.post("/api/refunds", json=payload)
-        if resp.status_code == 200:
-            data = resp.json()
-            return {
-                "success": True,
-                "refund_id": data["refund_id"],
-                "estimated_time": "1-3个工作日",
-                "message": f"退款申请已提交（单号：{data['refund_id']}），预计1-3个工作日到账。",
-            }
-        else:
-            return {
-                "success": False,
-                "error": resp.json().get("message", "提交失败，请稍后重试"),
-            }
-
-    async def _tool_search_product(self, query: str) -> dict:
-        rag_results = await self.rag.search(query, top_k=3)
-        return {"products": rag_results}
-
-    # ─────────── 生命周期 ───────────
+    def get_tools(self) -> List[Tool]:
+        return []
 
     def on_session_start(self, session: Session):
-        session.set_quick_replies(
-            ["查询订单", "查物流", "申请退款", "商品咨询", "转人工"]
-        )
-
-    def on_session_end(self, session: Session):
-        summary = self._generate_summary(session)
-        session.save_summary(summary)
-
-        if session.current_intent == "complaint":
-            session.user_profile.setdefault("tags", []).append("有投诉记录")
-        if session.current_intent == "refund_request":
-            session.user_profile["refund_count"] = (
-                session.user_profile.get("refund_count", 0) + 1
-            )
-
-    # ─────────── 辅助方法 ───────────
+        session.set_quick_replies(["查询订单", "查物流", "申请退款", "商品咨询", "转人工"])
 
     @staticmethod
     def _status_text(status: str) -> str:
         return {
-            "pending": "待付款",
-            "paid": "已付款，待发货",
-            "shipped": "已发货，运输中",
-            "delivered": "已签收",
-            "completed": "已完成",
-            "cancelled": "已取消",
-            "refunding": "退款中",
-            "refunded": "已退款",
+            "pending": "待付款", "paid": "已付款，待发货",
+            "shipped": "已发货，运输中", "delivered": "已签收",
+            "completed": "已完成", "cancelled": "已取消",
+            "refunding": "退款中", "refunded": "已退款",
         }.get(status, status)
-
-    @staticmethod
-    def _format_order_info(order: dict) -> str:
-        if not order:
-            return ""
-        items_text = "\n".join(
-            f"  - {i['name']} × {i['qty']}  ¥{i['price']}"
-            for i in order.get("items", [])
-        )
-        return f"""订单号：{order['order_id']}
-状态：{order['status_text']}
-下单时间：{order['created_at']}
-商品：
-{items_text}
-总金额：¥{order['total_amount']}"""
-
-    @staticmethod
-    def _format_logistics(logistics: dict) -> str:
-        if not logistics:
-            return ""
-        tracks = "\n".join(
-            f"  {t['time']} {t['content']}"
-            for t in logistics.get("tracks", [])[:5]
-        )
-        return f"""快递公司：{logistics['company']}
-运单号：{logistics['tracking_no']}
-状态：{logistics['status']}
-预计送达：{logistics.get('estimated_delivery', '未知')}
-最新轨迹：
-{tracks}"""
-
-    def _generate_summary(self, session: Session) -> str:
-        """生成会话摘要（占位，后续接 LLM）"""
-        return f"意图: {session.current_intent}, 槽位: {session.slots}"

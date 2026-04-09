@@ -19,7 +19,7 @@ class TenantManager:
             "tenant_id": "default",
             "name": "默认租户",
             "plan": "free",
-            "domain_plugins": ["ecommerce"],
+            "domain_plugins": ["ecommerce", "bazi"],
             "llm_config": {
                 "default_model": "deepseek-chat",
                 "temperature": 0.3,
@@ -28,6 +28,30 @@ class TenantManager:
             "branding": {
                 "theme_color": "#4A90E2",
                 "welcome_message": "您好！我是智能客服助手，有什么可以帮助您的吗？",
+                "avatar": ""
+            },
+            "quota": {
+                "monthly_conversations": 100,
+                "used_conversations": 0,
+                "reset_date": "2024-01-01"
+            },
+            "webhook_url": ""
+        }
+        
+        # 八字租户
+        self.tenants["bazi"] = {
+            "tenant_id": "bazi",
+            "name": "八字命理",
+            "plan": "free",
+            "domain_plugins": ["bazi"],
+            "llm_config": {
+                "default_model": "deepseek-chat",
+                "temperature": 0.7,
+                "max_tokens": 2000
+            },
+            "branding": {
+                "theme_color": "#8B4513",
+                "welcome_message": "您好，我是八字命理师。请告诉我您的出生信息，为您排盘解读。",
                 "avatar": ""
             },
             "quota": {

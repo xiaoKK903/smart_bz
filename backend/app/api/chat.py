@@ -46,6 +46,12 @@ async def send_message(req: ChatRequest):
     )
 
 
+@router.post("/message", response_model=ChatResponse)
+async def send_message_alias(req: ChatRequest):
+    """发送消息并获取回复（别名端点）"""
+    return await send_message(req)
+
+
 @router.get("/history/{session_id}")
 async def get_history(session_id: str, limit: int = 50):
     """获取会话历史"""
